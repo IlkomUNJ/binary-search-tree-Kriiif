@@ -143,46 +143,82 @@ impl BstNode {
         }
     }
 
-    fn transplant(u: &BstNodeLink, v: &Option<BstNodeLink>) {
-        let parent_opt = u.borrow().parent.clone().and_then(|w| w.upgrade());
+    pub fn transplant(root: &mut BstNodeLink, u: &BstNodeLink, v: &Option<BstNodeLink>) {
+        let u_parent_weak = u.borrow().parent.clone();
     
-        if let Some(parent) = parent_opt {
-            let mut parent_borrow = parent.borrow_mut();
-            if parent_borrow.left.as_ref().map_or(false, |left| Rc::ptr_eq(left, u)) {
-                parent_borrow.left = v.clone();
-            } else {
-                parent_borrow.right = v.clone();
+        match u_parent_weak {
+            // Case: u is root
+            None => {
+                if let Some(v_node) = v {
+                    // Replace root's content with v's content
+                    let v_data = v_node.borrow().clone();
+                    root.borrow_mut().key = v_data.key;
+                    root.borrow_mut().left = v_data.left.clone();
+                    root.borrow_mut().right = v_data.right.clone();
+    
+                    // Update children's parent pointers
+                    if let Some(left) = &root.borrow().left {
+                        left.borrow_mut().parent = Some(Rc::downgrade(root));
+                    }
+                    if let Some(right) = &root.borrow().right {
+                        right.borrow_mut().parent = Some(Rc::downgrade(root));
+                    }
+                } else {
+                    // If v is None, we're clearing the root
+                    root.borrow_mut().key = None;
+                    root.borrow_mut().left = None;
+                    root.borrow_mut().right = None;
+                }
+            }
+    
+            // Case: u is not root
+            Some(u_par_weak) => {
+                let u_par = BstNode::upgrade_weak_to_strong(Some(u_par_weak)).unwrap();
+                let mut parent_borrow = u_par.borrow_mut();
+                if let Some(left) = &parent_borrow.left {
+                    if BstNode::is_node_match(left, u) {
+                        parent_borrow.left = v.clone();
+                    } else {
+                        parent_borrow.right = v.clone();
+                    }
+                } else {
+                    parent_borrow.right = v.clone(); // If no left child, must be right
+                }
+                if let Some(v_node) = v {
+                    v_node.borrow_mut().parent = Some(Rc::downgrade(&u_par));
+                }
             }
         }
-    
-        if let Some(ref v_node) = v {
-            v_node.borrow_mut().parent = u.borrow().parent.clone();
-        }
-    }
+    }    
 
-    pub fn tree_delete(z: &BstNodeLink) {
+    pub fn tree_delete(root: &mut BstNodeLink, z: &BstNodeLink) {
         if z.borrow().left.is_none() {
-            BstNode::transplant(z, &z.borrow().right);
+            let right = z.borrow().right.clone();
+            BstNode::transplant(root, z, &right);
         } else if z.borrow().right.is_none() {
-            BstNode::transplant(z, &z.borrow().left);
+            let left = z.borrow().left.clone();
+            BstNode::transplant(root, z, &left);
         } else {
-            let y = z.borrow().right.as_ref().unwrap().borrow().minimum();
+            let right = z.borrow().right.clone().unwrap();
+            let y = right.borrow().minimum();
     
-            if y.borrow().parent.as_ref().unwrap().upgrade().map_or(false, |p| !Rc::ptr_eq(&p, z)) {
-                BstNode::transplant(&y, &y.borrow().right);
+            let y_parent = y.borrow().parent.clone().unwrap().upgrade().unwrap();
+            if !Rc::ptr_eq(&y_parent, z) {
+                let y_right = y.borrow().right.clone();
+                BstNode::transplant(root, &y, &y_right);
                 y.borrow_mut().right = z.borrow().right.clone();
                 if let Some(ref right_node) = y.borrow().right {
                     right_node.borrow_mut().parent = Some(Rc::downgrade(&y));
                 }
             }
     
-            BstNode::transplant(z, &Some(y.clone()));
+            BstNode::transplant(root, z, &Some(y.clone()));
             y.borrow_mut().left = z.borrow().left.clone();
             if let Some(ref left_node) = y.borrow().left {
                 left_node.borrow_mut().parent = Some(Rc::downgrade(&y));
             };
         }
-    }
+    }    
        
     pub fn tree_insert(root: &BstNodeLink, new_node: &BstNodeLink) {
         let mut y: Option<BstNodeLink> = None;
@@ -212,7 +248,7 @@ impl BstNode {
                 parent_borrow.right = Some(new_node.clone());
             }
         }
-    }        
+    }           
     /**
      * Alternate simpler version of tree_successor that made use of is_nil checking
      */

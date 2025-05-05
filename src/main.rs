@@ -118,21 +118,21 @@ fn test_binary_search_tree(){
     let new_node = BstNode::new_bst_nodelink(insert_key);
     BstNode::tree_insert(&rootlink, &new_node);
     println!("Node inserted successfully.");
-
+    
     let insert_tree_path = "bst_insert.dot";
     generate_dotfile_bst(&rootlink, insert_tree_path);
     println!("Tree after insertion saved to {}\n", insert_tree_path);
-
+    
     // Delete node
-    let delete_key = 13;
+    let delete_key = 3;
     println!("Deleting node with key {}...", delete_key);
     if let Some(node_to_delete) = rootlink.borrow().tree_search(&delete_key) {
-        BstNode::tree_delete(&node_to_delete);
+        BstNode::tree_delete(&mut rootlink.clone(), &node_to_delete);
         println!("Node deleted successfully.");
     } else {
         println!("Node with key {} not found. Cannot delete.", delete_key);
     }
-
+    
     let delete_tree_path = "bst_delete.dot";
     generate_dotfile_bst(&rootlink, delete_tree_path);
     println!("Tree after deletion saved to {}\n", delete_tree_path);
